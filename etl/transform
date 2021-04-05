@@ -1,0 +1,37 @@
+#! /usr/bin/env sh
+
+set -eux
+if ! command -v npx &> /dev/null
+then
+    echo "Please install node/npm/npx (https://nodejs.org/en/download/)"
+    exit
+fi
+
+
+# By default transform latest extracted file, otherwise first command argument.
+TO_TRANSFORM=${1:-"extracted/$(ls -Ar extracted/ | head -n 1)"}
+FILENAME_SUFFIX=$(echo $TO_TRANSFORM | sed 's/[^0-9]//g' | sed 's/^$/.sample/')
+TRANSFORMED_FILE="transformed/${FILENAME_SUFFIX}.csv"
+npx xlsx -f "$TO_TRANSFORM" -o "$TRANSFORMED_FILE"
+
+# Remove BOM (Byte Order Mark)
+sed -i.bak $'1s/\xef\xbb\xbf//' "$TRANSFORMED_FILE"
+
+# Get rid of annoying blank first record that KU outputs.
+# (.bak created/deleted for cross-platform sed -i compatibility:
+#  https://stackoverflow.com/questions/5694228/sed-in-place-flag-that-works-both-on-mac-bsd-and-linux)
+sed -i.bak '2d' "$TRANSFORMED_FILE"
+
+# Transform abbreviated, spaced string column names with postgres-friendly ones.
+OLD_HEADER=$(cat $TRANSFORMED_FILE | head -n 1)
+COLS=$(echo $OLD_HEADER | tr ',' '\n' | sed '/^$/d')
+NEW_HEADER=''
+set +x
+while read colname; do
+    NEW_HEADER="$NEW_HEADER\"$(echo "$colname" | tr -d '.' | tr '[:upper:]' '[:lower:]' | tr ' ' '_')\","
+done <<< "$COLS"
+NEW_HEADER=$(echo $NEW_HEADER | sed 's/\(.*\),$/\1/')
+sed -i.bak -e "s/$OLD_HEADER/$NEW_HEADER/" "$TRANSFORMED_FILE"
+
+# Remove in-place sed backup files
+rm -rf transformed/.sample.csv.bak transformed/*.bak

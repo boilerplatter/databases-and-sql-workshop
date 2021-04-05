@@ -1,0 +1,38 @@
+#! /usr/bin/env sh
+
+set -eux
+if ! command -v psql &> /dev/null
+then
+    echo "Please install psql (the Postgres CLI)"
+    exit
+fi
+if ! command -v platter &> /dev/null
+then
+    echo "Please install Platter (https://github.com/boilerplatter/releases)"
+    exit
+fi
+if [ -z "$1" ]
+  then
+    echo "Please pass a Platter database instance name: $0 <name>"
+    echo "(you can create one with 'platter postgres create <name>)"
+fi
+
+# identity file to load and tablename to create/write to, defaulting to sample unless $1 and/or $2 are passed to command
+TO_LOAD=${2:-"transformed/$(ls -Ar transformed/ | head -n 1)"}
+TABLE_SUFFIX=$(echo $TO_LOAD | sed 's/[^0-9]//g' | sed 's/^$/sample/')
+TABLE_NAME=${3:-"denormalized_courses_$TABLE_SUFFIX"}
+
+# create table if it doesn't exist, then delete all rows
+set +x
+CREATE_TABLE_QUERY="CREATE TABLE IF NOT EXISTS ${TABLE_NAME} ("
+COLS=$(cat $TO_LOAD | head -n1 | tr ',' '\n' | sed '/^$/d')
+while read colname; do
+    CREATE_TABLE_QUERY="${CREATE_TABLE_QUERY}${colname} TEXT,"
+done <<< "$COLS"
+CREATE_TABLE_QUERY="$(echo $CREATE_TABLE_QUERY | sed 's/\(.*\),$/\1/')); DELETE FROM ${TABLE_NAME};"
+set -x
+psql $(platter postgres branch url master --instance $1) -c "$CREATE_TABLE_QUERY"
+
+# load rows from CSV file into table
+LOAD_TABLE_QUERY="\copy ${TABLE_NAME} FROM '${TO_LOAD}' delimiter ',' CSV HEADER;"
+psql $(platter postgres branch url master --instance $1) -c "$LOAD_TABLE_QUERY"

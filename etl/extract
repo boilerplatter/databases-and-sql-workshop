@@ -1,0 +1,9 @@
+#! /usr/bin/env sh
+
+set -euxo pipefail
+if ! command -v wget &> /dev/null
+then
+    echo "Please install wget"
+    exit
+fi
+wget "https://classes.ku.edu/Classes/CreateXLS.action?classesSearchText=&searchCareer=UndergraduateGraduate&searchTerm=4219&searchSchool=&searchDept=&searchSubject=&searchCode=&textbookOptions=&searchAreaOfInterest=&searchCampus=&searchBuilding=&searchCourseNumberMin=001&searchCourseNumberMax=999&searchCreditHours=&searchInstructor=&searchStartTime=&searchEndTime=&searchClosed=false&searchHonorsClasses=false&searchShortClasses=false&searchOnlineClasses=&searchIncludeExcludeDays=include&searchDays=&oneRowLimit=false" -O "extracted/$(date +%s).xlsx"
